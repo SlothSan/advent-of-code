@@ -7,72 +7,110 @@ let part1 = (part2 = 0)
 let input = fs
     .readFileSync("./input.txt", "utf8")
     .split(eol)
-    .map((s) => s.trim())
+    .join("")
+    .split("")
+let chamber = [["#", "#", "#", "#", "#", "#", "#", "#", "#"]]
+let segment = ["#", ".", ".", ".", ".", ".", ".", ".", "#"]
 
-function str2obj(str, explored = false) {
-    let [x, y, z] = str.split(",").map(Number)
-    return { x, y, z, explored }
-}
-function obj2str(obj) {
-    return `${obj.x},${obj.y},${obj.z}`
+let bloks = [
+    [["#", "#", "#", "#"]],
+    [
+        [".", "#", "."],
+        ["#", "#", "#"],
+        [".", "#", "."]
+    ],
+    [
+        ["#", "#", "#"],
+        [".", ".", "#"],
+        [".", ".", "#"]
+    ],
+    [["#"], ["#"], ["#"], ["#"]],
+    [
+        ["#", "#"],
+        ["#", "#"]
+    ]
+]
+let steps = 1000000000000
+let blockIndex = 0
+let numBlocks = bloks.length
+let numjets = input.length
+let topIndex = 1
+let jetIndex = 0
+
+function colides(block, blockX, blockY) {
+    return block.some((r, y) => {
+        return r.some((state, x) => {
+            return state == "#" && chamber[blockY + y][blockX + x] == "#"
+        })
+    })
 }
 
-let min = str2obj("Infinity,Infinity,Infinity")
-let max = str2obj("-Infinity,-Infinity,-Infinity")
-let voxels = new Map()
-input.map((item) => {
-    voxels.set(item, str2obj(item))
-})
-function getSurface(map, minMax = true) {
-    let surface = 0
-    for (let v of map) {
-        let sides = 6
-        for (let i = -1; i <= 1; i += 2) {
-            let x = +(v[1].x + i) + "," + v[1].y + "," + v[1].z
-            let y = v[1].x + "," + (v[1].y + i) + "," + v[1].z
-            let z = v[1].x + "," + v[1].y + "," + (v[1].z + i)
-            map.has(x) && sides--
-            map.has(y) && sides--
-            map.has(z) && sides--
+function checkRepeat() {
+    let l = topIndex - 1
+    let max = ~~(chamber.length / 2) - 5
+    let len = max
+    for (len; len > input.length / 5; len--) {
+        let same = true
+        for (let i = 0; i < len; i++) {
+            if (!chamber[l - i].every((el, ix) => el === chamber[l - (i + len)][ix])) {
+                same = false
+                break
+            }
         }
-        if (minMax) {
-            min = { x: Math.min(min.x, v[1].x - 1), y: Math.min(min.y, v[1].y - 1), z: Math.min(min.z, v[1].z - 1) }
-            max = { x: Math.max(max.x, v[1].x + 1), y: Math.max(max.y, v[1].y + 1), z: Math.max(max.z, v[1].z + 1) }
-        }
-        surface += sides
-    }
-    return surface
-}
-part1 = getSurface(voxels)
-
-let box = new Map()
-for (let x = min.x; x <= max.x; x++) {
-    for (let y = min.y; y <= max.y; y++) {
-        for (let z = min.z; z <= max.z; z++) {
-            let str = obj2str({ x, y, z })
-            if (!voxels.has(str)) box.set(str, str2obj(str))
-        }
-    }
-}
-
-function flood(str) {
-    let stack = [box.get(str)]
-    while (stack.length) {
-        let v = stack.pop()
-        v.explored = true
-        box.delete(obj2str(v))
-        for (let i = -1; i <= 1; i += 2) {
-            let x = +(v.x + i) + "," + v.y + "," + v.z
-            let y = v.x + "," + (v.y + i) + "," + v.z
-            let z = v.x + "," + v.y + "," + (v.z + i)
-            if (box.has(x) && !box.get(x).explored) stack.push(box.get(x))
-            if (box.has(y) && !box.get(y).explored) stack.push(box.get(y))
-            if (box.has(z) && !box.get(z).explored) stack.push(box.get(z))
+        if (same) {
+            return len
         }
     }
+    return -1
 }
-flood(obj2str(min))
-part2 = getSurface(new Map([...voxels, ...box]), false)
+let repeatFound = false
+let repeatLength = 0
+let repeatNext = 0
+let repeatStep = 0
+let mult = 0
+while (steps--) {
+    let block = bloks[blockIndex]
+    let blockHeight = block.length
+    let blockY = topIndex + 3
+    let blockX = 3
+    while (blockY + blockHeight > chamber.length) {
+        chamber.push(segment.slice())
+    }
 
+    while (true) {
+        let jet = input[jetIndex++ % numjets] == "<" ? -1 : +1
+        if (!colides(block, blockX + jet, blockY)) blockX += jet
+        if (!colides(block, blockX, blockY - 1)) {
+            blockY--
+        } else {
+            block.forEach((r, y) => {
+                r.forEach((state, x) => {
+                    if (state == "#") chamber[blockY + y][blockX + x] = state
+                })
+            })
+            topIndex = Math.max(blockY + blockHeight, topIndex)
+            break
+        }
+    }
+    if (mult === 0) {
+        if (!repeatFound) {
+            let repeat = checkRepeat()
+            if (repeat != -1) {
+                repeatFound = true
+                repeatNext = topIndex + repeat
+                repeatLength = repeat
+                repeatStep = steps
+            }
+        } else if (repeatNext == topIndex) {
+            repeatStep = repeatStep - steps
+            mult = Math.floor(steps / repeatStep)
+            let rest = steps % repeatStep
+            steps = rest
+        }
+    }
+    if (1000000000000 - steps == 2022) part1 = topIndex - 1
+    if (++blockIndex == numBlocks) blockIndex = 0
+}
+part2 = topIndex - 1 + mult * repeatLength
 let time = performance.now() - startTime
 console.log(`Part 1: ${part1}\nPart 2: ${part2}\nTimer: ${time} ms`)
