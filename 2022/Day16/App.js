@@ -1,4 +1,134 @@
-let input = `Valve BT has flow rate=0; tunnels lead to valves EZ, TO
+function maxPressureReleased (input, startTime) {
+    const score = search(input, startTime)
+    return score[0][1]
+}
+
+function maxPressureReleased2 (input, startTime) {
+    const score = search(input, startTime)
+    let max = 0
+    for (let j = 1; j < score.length; j++) {
+        for (let i = 0; i < j; i++) {
+            if (score[i][1] * 2 < max) break
+            const hashA = score[i][0]
+            const hashB = score[j][0]
+            if (hashA & hashB) continue
+            const total = score[i][1] + score[j][1]
+            if (total > max) max = total
+        }
+    }
+    return max
+}
+
+function search (input, startTime) {
+    const valves = getValves(input)
+    const openable = input.filter(row => row.rate > 0)
+    const shortestPath = getShortestPath(valves, openable)
+
+    const score = []
+    const unvisited = []
+    unvisited.push([0, 'AA', startTime, 0])
+
+    while (unvisited.length > 0) {
+        const [visited, next, time, released, extras] = unvisited.pop()
+        openable.forEach(row => {
+            if (visited & row.hash) return
+            score.push([visited, released])
+            const distance = shortestPath[next][row.from]
+            const nextTime = time - distance - 1
+            if (nextTime > 0) {
+                unvisited.push([
+                    visited + row.hash,
+                    row.from,
+                    nextTime,
+                    released + nextTime * row.rate,
+                    extras
+                ])
+            }
+        })
+    }
+
+    return score.sort((a, b) => b[1] - a[1])
+}
+
+function getShortestPath (valves, openable) {
+    function findShortestPath (start) {
+        const visited = {}
+        const unvisited = []
+        unvisited.push([valves[start], 0])
+        while (unvisited.length > 0) {
+            const [next, steps] = unvisited.shift()
+            if (next.from in visited) {
+                if (steps >= visited[next.from]) continue
+                else visited[next.from] = steps
+            } else {
+                visited[next.from] = steps
+            }
+            Object.keys(next.to).forEach(id =>
+                unvisited.push([valves[id], steps + next.to[id]])
+            )
+        }
+        delete visited[start]
+        return visited
+    }
+
+    const shortest = {}
+    shortest.AA = findShortestPath('AA')
+    openable.forEach(row => {
+        shortest[row.from] = findShortestPath(row.from)
+    })
+    return shortest
+}
+
+function getValves (input) {
+    const valves = {}
+    let hash = 1
+    input.forEach(row => {
+        valves[row.from] = row
+        if (row.rate > 0) {
+            row.hash = hash
+            hash *= 2
+        }
+    })
+
+    function preprocessInputRowTo (row, path = []) {
+        if (!Array.isArray(row.to)) return row.to
+        const to = {}
+        row.to.forEach(id => {
+            if (path.includes(id)) return
+            const next = valves[id]
+            const steps =
+                next.rate > 0
+                    ? { [id]: 0 }
+                    : preprocessInputRowTo(next, [...path, row.from])
+            Object.keys(steps).forEach(id => {
+                if (id in to) to[id] = Math.min(to[id], steps[id] + 1)
+                else to[id] = steps[id] + 1
+            })
+        })
+        delete to[row.from]
+        return to
+    }
+
+    input.forEach(row => {
+        row.to = preprocessInputRowTo(row)
+    })
+
+    return valves
+}
+
+function parse (line) {
+    const matched = line.match(
+        /^Valve ([A-Z]+) has flow rate=(\d+); tunnels? leads? to valves? ([A-Z, ]+)$/
+    )
+    return {
+        from: matched[1],
+        to: matched[3].split(', '),
+        rate: +matched[2]
+    }
+}
+
+const test = `
+Valve BT has flow rate=0; tunnels lead to valves EZ, TO
 Valve OJ has flow rate=0; tunnels lead to valves UV, QG
 Valve SQ has flow rate=0; tunnels lead to valves IR, KE
 Valve JT has flow rate=9; tunnels lead to valves ES, RL, BL, BN
@@ -56,178 +186,8 @@ Valve QG has flow rate=5; tunnels lead to valves TX, JJ, PA, YW, OJ
 Valve VJ has flow rate=0; tunnels lead to valves EZ, AA
 Valve RM has flow rate=0; tunnels lead to valves NN, BF
 Valve NT has flow rate=0; tunnels lead to valves TO, CX
-Valve MO has flow rate=0; tunnels lead to valves IF, HV`;
+Valve MO has flow rate=0; tunnels lead to valves IF, HV
+`.trim().split('\n').map(parse)
 
-// let nodes = input.split("\n").map((row, id) => {
-//     let tmp = row.split(' ');
-//     return {
-//         id: id,
-//         name: tmp[1],
-//         rate: Number(tmp[4].match(/\d+/g)[0]),
-//         connections: tmp.slice(tmp.indexOf('to')+2).map(v => v.substr(0, 2))
-//     }
-// })
-//
-// const nodeByName = name => nodes.filter(n => n.name == name)[0];
-//
-// const distanceMap = (startName, distances = {}) => {
-//     const spread = (name, steps) => {
-//         if (distances[name] != undefined && distances[name] <= steps) return;
-//         distances[name] = steps;
-//         nodeByName(name).connections.map(n => spread(n, steps+1));
-//     }
-//
-//     spread(startName, 0);
-//
-//     return distances;
-// }
-//
-// const activeNodes = () => nodes.filter(n => n.rate > 0)/*.sort((a, b) => {
-//     return (timeLeft-distances[b.name]-1)*b.rate - (timeLeft-distances[a.name]-1)*a.rate
-// })*/;
-//
-// let currentNode = 'AA', timeLeft = 30;
-//
-// console.log(nodes);
-//
-// let distances = distanceMap(currentNode);
-// console.log(distances);
-//
-// console.log(activeNodes().sort((a, b) => {
-//     return (timeLeft-distances[b.name]-1)*b.rate - (timeLeft-distances[a.name]-1)*a.rate
-// }))
-//
-// let paths = [{curr: 'AA', active: activeNodes().map(n => n.name), timeLeft: 30, finished: false, steps: [], releasedPressure: 0}]
-//
-// let max = 0;
-//
-// for (let n = 0; n < paths.length; n++) {
-//     let path = paths[n];
-//     if (path.timeLeft <= 0) path.finished = true;
-//     if (path.finished) continue;
-//
-//     let distances = distanceMap(path.curr), moved = false;
-//     path.active.forEach(act => {
-//         if (act == path.curr) return true;
-//         if (path.timeLeft-distances[act] <= 1) return true;
-//         moved = true;
-//         paths.push({
-//             curr: act,
-//             active: path.active.filter(v => v != act)/*.sort((na, nb) => {
-//                 let a = nodeByName(na), b = nodeByName(nb);
-//                 return (path.timeLeft-distances[b.name]-1)*b.rate - (path.timeLeft-distances[a.name]-1)*a.rate
-//             })*/,
-//             timeLeft: path.timeLeft-distances[act]-1,
-//             finished: false,
-//             steps: [...path.steps, act],
-//             releasedPressure: path.releasedPressure + (path.timeLeft-distances[act]-1)*nodeByName(act).rate
-//         })
-//     })
-//     if (!moved) path.finished = true;
-//     if (path.finished && path.releasedPressure > max) {
-//         console.log('we have a new max', path.releasedPressure);
-//         max = path.releasedPressure;
-//     }
-// }
-//
-// console.log(paths.filter(p => p.finished).sort((a, b) => b.releasedPressure-a.releasedPressure));
-
-let nodes = input.split("\n").map((row, id) => {
-    let tmp = row.split(' ');
-    return {
-        id: id,
-        name: tmp[1],
-        rate: Number(tmp[4].match(/\d+/g)[0]),
-        connections: tmp.slice(tmp.indexOf('to')+2).map(v => v.substr(0, 2))
-    }
-})
-
-let nodeByName = {};
-
-nodes.map((n, i) => nodeByName[n.name] = n);
-
-const activeNodes = () => nodes.filter(n => n.rate > 0)
-const duos = (a, res = []) => {
-    for (let i = 0; i < a.length; i++) for (let j = 0; j<a.length; j++) if (i != j) res.push([a[i], a[j]]);
-    return res
-}
-
-const sortDuos = (duos, d1, d2, t1, t2) => {
-    const valueFromDuo = ([target1, target2]) => (t1-d1[target1]-1)*nodeByName[target1].rate + (t2-d2[target2]-1)*nodeByName[target2].rate
-    return duos.sort((duo1, duo2) => valueFromDuo(duo1) - valueFromDuo(duo2))
-}
-
-const distanceMap = (startName, distances = {}) => {
-    if (nodeByName[startName].distanceMap) return nodeByName[startName].distanceMap;
-    const spread = (name, steps) => {
-        if (distances[name] != undefined && distances[name] <= steps) return;
-        distances[name] = steps;
-        nodeByName[name].connections.forEach(n => spread(n, steps+1));
-    }
-    spread(startName, 0);
-    nodeByName[startName].distanceMap = distances;
-    return distances;
-}
-
-console.log(nodes);
-
-let paths = [{curr1: 'AA', curr2: 'AA', active: activeNodes().map(n => n.name), timeLeft1: 26, timeLeft2: 26, finished: false, finished1: false, finished2: false, /*steps1: [], steps2: [], */releasedPressure: 0}]
-
-let max = 0, i = 0;
-
-while (paths.length) {
-    let path = paths.pop();
-
-    if (path.finished) continue;
-
-    let distances1 = distanceMap(path.curr1),
-        distances2 = distanceMap(path.curr2),
-        moved1 = false, moved2 = false, moved = false;
-
-    let nextStepDuos = duos(path.active.filter(v => v != path.curr1 && v != path.curr2));
-
-    nextStepDuos = sortDuos(nextStepDuos, distances1, distances2, path.timeLeft1, path.timeLeft2)
-
-    nextStepDuos.forEach(([act1, act2]) => {
-        if (path.timeLeft1-distances1[act1] > 1) moved1 = true;
-        if (path.timeLeft2-distances2[act2] > 1) moved2 = true;
-        moved = moved1 || moved2;
-        let tmp = {
-            finished: false, finished1: false, finished2: false,
-            active: path.active.filter(v => v != act1 && v != act2),
-            releasedPressure: path.releasedPressure
-        };
-
-        if (moved1 && !path.finished1) {
-            tmp.curr1 = act1;
-            tmp.timeLeft1 = path.timeLeft1-distances1[act1]-1;
-            tmp.releasedPressure += (path.timeLeft1-distances1[act1]-1)*nodeByName[act1].rate;
-        } else {
-            tmp.curr1 = path.curr1;
-            tmp.timeLeft1 = path.timeLeft1;
-            tmp.finished1 = true;
-        }
-
-        if (moved2 && !path.finished2) {
-            tmp.curr2 = act2;
-            tmp.timeLeft2 = path.timeLeft2-distances2[act2]-1;
-            tmp.releasedPressure += (path.timeLeft2-distances2[act2]-1)*nodeByName[act2].rate;
-        } else {
-            tmp.curr2 = path.curr2;
-            tmp.timeLeft2 = path.timeLeft2;
-            tmp.finished2 = true;
-        }
-
-        paths.push(tmp);
-    })
-    if (!moved) path.finished = true;
-    if (path.finished && path.releasedPressure > max) {
-        console.log('we have a new max', path.releasedPressure/*, path.steps1.join(', '), ' | ', path.steps2.join(', ')*/, path);
-        max = path.releasedPressure;
-    }
-    i++;
-    if (i % 100000000 == 0) console.log('still on it', i/10000000);
-    if (i > 60000000000) {console.log('em break'); break}
-}
-
-console.log(paths.filter(p => p.finished).sort((a, b) => b.releasedPressure-a.releasedPressure));
+console.log(maxPressureReleased(test, 30))
+console.log(maxPressureReleased2(test, 26))
