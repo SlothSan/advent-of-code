@@ -1,7 +1,5 @@
 const fs = require("fs");
-const { type } = require("os");
 const path = require("path");
-const { isNumberObject } = require("util/types");
 let txt = fs
   .readFileSync(path.resolve(__dirname, "input.txt"), "utf8")
   .trim()
